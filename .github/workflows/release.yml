@@ -1,0 +1,99 @@
+name: Release
+
+# Creates the vX.Y.Z tag and GitHub Release whenever Nomba::VERSION changes on
+# main (i.e. a release PR is merged). Packagist picks up the new tag. Ordinary
+# merges are no-ops because the version guard skips versions that already have
+# a release.
+#
+# Split into two jobs so dependency code never runs where the write token
+# exists: `build` installs and checks everything read-only; `release` waits for
+# approval of the `release` environment, installs nothing, and only calls the
+# GitHub API.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      released: ${{ steps.v.outputs.released }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Determine version and whether it is already released
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(sed -n "s/^ *public const VERSION = '\([^']*\)';/\1/p" src/Nomba.php)"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Could not read a X.Y.Z version from Nomba::VERSION in src/Nomba.php (got '$VERSION')."
+            exit 1
+          fi
+          TAG="v$VERSION"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$TAG already released, skipping."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Releasing $TAG."
+          fi
+
+      - name: Install dependencies
+        if: steps.v.outputs.released == 'false'
+        run: composer update --no-interaction --no-progress --prefer-dist
+
+      - name: Verify
+        if: steps.v.outputs.released == 'false'
+        run: |
+          composer validate --strict
+          composer cs-check
+          composer analyse
+          composer test
+
+  release:
+    needs: build
+    # Only when there is a new version, so ordinary merges don't wait for approval.
+    if: needs.build.outputs.released == 'false'
+    # Requires a maintainer's approval before this job (and its write token)
+    # runs, so a stolen GitHub login can't publish a release on its own.
+    environment: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release tag + GitHub Release
+    steps:
+      # Idempotent: creates the tag and Release only if missing. --target
+      # creates the tag at this commit through the API, so no git credentials
+      # are needed.
+      - name: Ensure release tag and GitHub Release exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --repo "$REPO" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --notes "See [CHANGELOG.md](https://github.com/${REPO}/blob/main/CHANGELOG.md) for details."
+          fi

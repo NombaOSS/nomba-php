@@ -1,0 +1,76 @@
+{
+    "name": "nombaoss/nomba-php",
+    "description": "PHP SDK for the Nomba API: accounts, transfers, checkout, bills, terminals and webhooks.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "nomba",
+        "payments",
+        "fintech",
+        "nigeria",
+        "api",
+        "sdk",
+        "transfers",
+        "checkout"
+    ],
+    "homepage": "https://github.com/NombaOSS/nomba-php",
+    "support": {
+        "issues": "https://github.com/NombaOSS/nomba-php/issues",
+        "source": "https://github.com/NombaOSS/nomba-php",
+        "docs": "https://developer.nomba.com"
+    },
+    "authors": [
+        {
+            "name": "Nomba",
+            "homepage": "https://nomba.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "^7.5"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.64",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^10.5 || ^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nomba\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nomba\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {}
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "cs-check": "php-cs-fixer check --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "check": [
+            "@composer validate --strict",
+            "@cs-check",
+            "@analyse",
+            "@test"
+        ],
+        "smoke": "phpunit --testsuite smoke"
+    },
+    "scripts-descriptions": {
+        "test": "Run the PHPUnit suite (mocked HTTP only, no network).",
+        "analyse": "Run PHPStan at level max.",
+        "cs-check": "Check code style (PER-CS) without changing files.",
+        "cs-fix": "Fix code style (PER-CS).",
+        "check": "Run every check CI runs.",
+        "smoke": "Opt-in check against the real sandbox (needs NOMBA_SANDBOX_* env vars)."
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
