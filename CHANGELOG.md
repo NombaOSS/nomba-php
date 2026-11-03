@@ -11,6 +11,6 @@
 - Exception hierarchy under `Nomba\Exception\`, with HTTP status, Nomba code, description, response body, method and path.
 - Path parameter validation and URL encoding.
 - Auto-paging generators: `transactions->listAll()`, `filterAll()`, `listAllBankTransactions()`, `accounts->listAllTerminals()`, `virtualAccounts->listAll()`.
-- Webhook signature verification (`Nomba\Webhook::verify()` and `$nomba->webhooks->verify()`) with optional timestamp tolerance.
+- Webhook signature verification (`Nomba\Webhook::verify()` and `$nomba->webhooks->verify()`) with optional timestamp tolerance, strict RFC 3339 `nomba-timestamp` parsing and rejection of `:` in `responseCode`.
 - `TransactionStatus` and `WebhookEventType` constants.
 - PHPStan array shapes for every request and response.

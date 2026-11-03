@@ -368,6 +368,7 @@ http_response_code(200);
 - The signature is compared exactly, in constant time (base64 is case-sensitive), after trimming surrounding whitespace.
 - Headers can be any case. A plain array, PSR-7 `getHeaders()`, Laravel/Symfony `$request->headers->all()` and `$_SERVER` (`HTTP_NOMBA_SIGNATURE`) all work.
 - It reads `nomba-signature` (or the older `nomba-sig-value`) and `nomba-timestamp`, and rejects a `nomba-signature-algorithm` other than `HmacSHA256`.
+- `nomba-timestamp` must be a strict RFC 3339 timestamp (for example `2025-09-29T10:51:44Z`), and `data.transaction.responseCode` must not contain `:`. The signed fields are joined with `:`, so without these checks part of a genuine timestamp could be moved into `responseCode` to replay an old webhook with a valid signature.
 - The fourth argument is a tolerance in seconds: timestamps further than that from now are rejected, which stops replayed requests. It is off by default (`null`); 300 is a reasonable value if your clock is in sync.
 - Event types: `payment_success`, `payment_failed`, `payment_reversal`, `payout_success`, `payout_failed`, `payout_refund` (constants on `WebhookEventType`).
 

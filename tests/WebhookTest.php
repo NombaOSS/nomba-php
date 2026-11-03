@@ -183,7 +183,7 @@ final class WebhookTest extends TestCase
 
         $signature = base64_encode(hash_hmac('sha256', 'payout_success:req-1:u:w:t:transfer:2026-01-01T00:00:00Z::not-a-date', 'k', true));
         $this->expectException(WebhookVerificationException::class);
-        $this->expectExceptionMessage('not a valid timestamp');
+        $this->expectExceptionMessage('not an RFC 3339 timestamp');
         Webhook::verify($body, ['nomba-signature' => $signature, 'nomba-timestamp' => 'not-a-date'], 'k', 300);
     }
 
@@ -191,18 +191,18 @@ final class WebhookTest extends TestCase
     {
         $body = '{"event_type":"payment_failed","requestId":"r","data":{"merchant":{"userId":"u","walletId":"w"},'
             . '"transaction":{"transactionId":"t","type":"x","time":"z","responseCode":"null"}}}';
-        $signature = base64_encode(hash_hmac('sha256', 'payment_failed:r:u:w:t:x:z::ts', 'k', true));
+        $signature = base64_encode(hash_hmac('sha256', 'payment_failed:r:u:w:t:x:z::' . self::TIMESTAMP, 'k', true));
 
-        self::assertSame('payment_failed', Webhook::verify($body, ['nomba-signature' => $signature, 'nomba-timestamp' => 'ts'], 'k')['event_type']);
+        self::assertSame('payment_failed', Webhook::verify($body, ['nomba-signature' => $signature, 'nomba-timestamp' => self::TIMESTAMP], 'k')['event_type']);
     }
 
     public function testNonStringFieldsAreStringified(): void
     {
         $body = '{"event_type":"payment_success","requestId":"r","data":{"merchant":{"userId":42,"walletId":true},'
             . '"transaction":{"transactionId":"t","type":["x"],"time":"z","responseCode":"00"}}}';
-        $signature = base64_encode(hash_hmac('sha256', 'payment_success:r:42:true:t::z:00:ts', 'k', true));
+        $signature = base64_encode(hash_hmac('sha256', 'payment_success:r:42:true:t::z:00:' . self::TIMESTAMP, 'k', true));
 
-        self::assertSame('r', Webhook::verify($body, ['nomba-signature' => $signature, 'nomba-timestamp' => 'ts'], 'k')['requestId']);
+        self::assertSame('r', Webhook::verify($body, ['nomba-signature' => $signature, 'nomba-timestamp' => self::TIMESTAMP], 'k')['requestId']);
     }
 
     public function testEventTypeConstants(): void
@@ -211,5 +211,117 @@ final class WebhookTest extends TestCase
             ['payment_success', 'payment_failed', 'payment_reversal', 'payout_success', 'payout_failed', 'payout_refund'],
             WebhookEventType::ALL,
         );
+    }
+
+    /**
+     * Sign an event the way Nomba does.
+     *
+     * @param array{transactionId: string, type: string, time: string, responseCode: string, ...} $tx
+     */
+    private static function sign(array $tx, string $timestamp, string $key = 'k'): string
+    {
+        $message = implode(':', ['payment_success', 'r1', 'u', 'w', $tx['transactionId'], $tx['type'], $tx['time'], $tx['responseCode'], $timestamp]);
+
+        return base64_encode(hash_hmac('sha256', $message, $key, true));
+    }
+
+    /**
+     * @param array<string, mixed> $tx
+     */
+    private static function event(array $tx): string
+    {
+        return json_encode(['event_type' => 'payment_success', 'requestId' => 'r1', 'data' => ['merchant' => ['userId' => 'u', 'walletId' => 'w'], 'transaction' => $tx]], \JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * An attacker holding one genuine webhook moves the front of the signed
+     * timestamp into responseCode. The HMAC input is unchanged, so the
+     * signature still matches; the SDK must reject it anyway.
+     */
+    public function testSplitTimestampForgeryIsRejected(): void
+    {
+        $tx = ['transactionId' => 't1', 'type' => 'vact_transfer', 'time' => '2025-09-29T10:51:44Z', 'responseCode' => '', 'transactionAmount' => 5000];
+        $genuineTimestamp = '2025-09-29T10:' . gmdate('H') . ':' . gmdate('i') . 'Z';
+        $signature = self::sign($tx, $genuineTimestamp);
+        self::assertSame('payment_success', Webhook::verify(self::event($tx), ['nomba-signature' => $signature, 'nomba-timestamp' => $genuineTimestamp], 'k')['event_type']);
+
+        [$front, $back] = explode(':', $genuineTimestamp, 2);
+        $forged = ['responseCode' => ':' . $front] + $tx;
+        self::assertSame($signature, self::sign($forged, $back), 'the forgery has the same signed message');
+
+        foreach ([null, 300] as $tolerance) {
+            try {
+                Webhook::verify(self::event($forged), ['nomba-signature' => $signature, 'nomba-timestamp' => $back], 'k', $tolerance);
+                self::fail('Forged webhook was accepted');
+            } catch (WebhookVerificationException $e) {
+                self::assertStringContainsString('RFC 3339', $e->getMessage());
+            }
+        }
+    }
+
+    public function testResponseCodeWithColonIsRejected(): void
+    {
+        $tx = ['transactionId' => 't1', 'type' => 'x', 'time' => 'z', 'responseCode' => 'a:b'];
+        $signature = self::sign($tx, self::TIMESTAMP);
+
+        $this->expectException(WebhookVerificationException::class);
+        $this->expectExceptionMessage('responseCode must not contain ":"');
+        Webhook::verify(self::event($tx), ['nomba-signature' => $signature, 'nomba-timestamp' => self::TIMESTAMP], 'k');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function nonRfc3339Timestamps(): iterable
+    {
+        yield 'time only' => ['51:44Z'];
+        yield 'no zone' => ['2025-09-29T10:51:44'];
+        yield 'space separator' => ['2025-09-29 10:51:44Z'];
+        yield 'lower-case t' => ['2025-09-29t10:51:44Z'];
+        yield 'no seconds' => ['2025-09-29T10:51Z'];
+        yield 'unix seconds' => ['1759143104'];
+        yield 'http date' => ['Mon, 29 Sep 2025 10:51:44 GMT'];
+        yield 'trailing junk' => ['2025-09-29T10:51:44Z x'];
+        yield 'trailing newline in value' => ["2025-09-29T10:51:44Z\n:"];
+        yield 'month 13' => ['2025-13-29T10:51:44Z'];
+        yield 'hour 24' => ['2025-09-29T24:00:00Z'];
+        yield 'february 30' => ['2025-02-30T10:51:44Z'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('nonRfc3339Timestamps')]
+    public function testNonRfc3339TimestampIsRejectedWithAndWithoutTolerance(string $timestamp): void
+    {
+        $tx = ['transactionId' => 't1', 'type' => 'x', 'time' => 'z', 'responseCode' => ''];
+        $signature = self::sign($tx, $timestamp);
+
+        foreach ([null, 300] as $tolerance) {
+            try {
+                Webhook::verify(self::event($tx), ['nomba-signature' => $signature, 'nomba-timestamp' => $timestamp], 'k', $tolerance);
+                self::fail('Accepted timestamp ' . $timestamp);
+            } catch (WebhookVerificationException $e) {
+                self::assertStringContainsString('nomba-timestamp', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function rfc3339Timestamps(): iterable
+    {
+        yield 'utc' => ['2025-09-29T10:51:44Z'];
+        yield 'fraction' => ['2025-09-29T10:51:44.123456789Z'];
+        yield 'offset' => ['2025-09-29T11:51:44+01:00'];
+        yield 'negative offset' => ['2025-09-29T05:51:44-05:00'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('rfc3339Timestamps')]
+    public function testRfc3339TimestampsAreAccepted(string $timestamp): void
+    {
+        $tx = ['transactionId' => 't1', 'type' => 'x', 'time' => 'z', 'responseCode' => ''];
+
+        $event = Webhook::verify(self::event($tx), ['nomba-signature' => self::sign($tx, $timestamp), 'nomba-timestamp' => $timestamp], 'k');
+
+        self::assertSame('r1', $event['requestId']);
     }
 }

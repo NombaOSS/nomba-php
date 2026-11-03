@@ -17,6 +17,12 @@ use Nomba\Exception\WebhookVerificationException;
  *
  * (joined with ":"; a null/absent/"null" responseCode is the empty string).
  *
+ * Because the fields are joined with ":" and the timestamp itself contains
+ * colons, the boundary between responseCode and the timestamp is pinned: the
+ * timestamp must be strict RFC 3339 and responseCode must not contain ":".
+ * Otherwise part of a genuine timestamp could be moved into responseCode
+ * without changing the signed message.
+ *
  * @phpstan-import-type WebhookEvent from Types
  */
 final class Webhook
@@ -65,6 +71,7 @@ final class Webhook
         if ($timestamp === '') {
             throw new WebhookVerificationException('Missing nomba-timestamp header.');
         }
+        $signedAt = self::parseTimestamp($timestamp);
         $algorithm = $normalized[self::ALGORITHM_HEADER] ?? null;
         if ($algorithm !== null && strcasecmp($algorithm, self::ALGORITHM) !== 0) {
             throw new WebhookVerificationException('Unsupported nomba-signature-algorithm; expected HmacSHA256.');
@@ -94,6 +101,9 @@ final class Webhook
         if ($responseCode === 'null') {
             $responseCode = '';
         }
+        if (str_contains($responseCode, ':')) {
+            throw new WebhookVerificationException('data.transaction.responseCode must not contain ":".');
+        }
 
         $message = implode(':', [
             $eventType,
@@ -114,7 +124,7 @@ final class Webhook
         }
 
         if ($toleranceSeconds !== null) {
-            self::checkTimestamp($timestamp, $toleranceSeconds);
+            self::checkTolerance($signedAt, $toleranceSeconds);
         }
 
         /** @var WebhookEvent $event */
@@ -162,16 +172,35 @@ final class Webhook
     }
 
     /**
+     * Strict RFC 3339 with seconds and an explicit zone: 2025-09-29T10:51:44Z,
+     * 2025-09-29T10:51:44.123Z or 2025-09-29T11:51:44+01:00.
+     *
      * @throws WebhookVerificationException
      */
-    private static function checkTimestamp(string $timestamp, int $toleranceSeconds): void
+    private static function parseTimestamp(string $timestamp): \DateTimeImmutable
     {
-        try {
-            $time = (new \DateTimeImmutable($timestamp))->getTimestamp();
-        } catch (\Exception $e) {
-            throw new WebhookVerificationException('nomba-timestamp is not a valid timestamp.', 0, $e);
+        $pattern = '/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$/D';
+        if (preg_match($pattern, $timestamp, $m) !== 1) {
+            throw new WebhookVerificationException('nomba-timestamp is not an RFC 3339 timestamp.');
         }
-        if (abs(time() - $time) > $toleranceSeconds) {
+        $zone = $m[3] === 'Z' ? '+00:00' : $m[3];
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $m[1] . $zone);
+        $errors = \DateTimeImmutable::getLastErrors();
+        $hasErrors = \is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+        // The round trip rejects overflowing values such as month 13 or 24:00:00.
+        if ($parsed === false || $hasErrors || $parsed->format('Y-m-d\TH:i:s') !== $m[1]) {
+            throw new WebhookVerificationException('nomba-timestamp is not a valid date and time.');
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * @throws WebhookVerificationException
+     */
+    private static function checkTolerance(\DateTimeImmutable $signedAt, int $toleranceSeconds): void
+    {
+        if (abs(time() - $signedAt->getTimestamp()) > $toleranceSeconds) {
             throw new WebhookVerificationException('Webhook timestamp is outside the allowed tolerance.');
         }
     }
