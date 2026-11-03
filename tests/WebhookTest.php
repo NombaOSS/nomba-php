@@ -13,6 +13,7 @@ final class WebhookTest extends TestCase
     private const KEY = 'SampleSignatureKey123';
     private const TIMESTAMP = '2025-09-29T10:51:44Z';
     private const DOCUMENTED_SIGNATURE = 'q30yFZDyykoymBf9+mt1wz5UAuLk57raPGPHlGzIv00=';
+    /** Same as the documented signature with the first letter's case changed: must not verify. */
     private const UPPER_SIGNATURE = 'Q30yFZDyykoymBf9+mt1wz5UAuLk57raPGPHlGzIv00=';
 
     private static function fixture(): string
@@ -39,24 +40,28 @@ final class WebhookTest extends TestCase
         self::assertSame('9d3b6f1e-2c4a-4e8b-a7d5-1f0c3e9b8a26', $event['requestId']);
     }
 
-    public function testBothLetterCasesOfTheVectorVerify(): void
+    public function testCaseAlteredSignatureFails(): void
     {
-        foreach ([self::DOCUMENTED_SIGNATURE, self::UPPER_SIGNATURE] as $signature) {
-            $event = Webhook::verify(self::fixture(), self::headers($signature), self::KEY);
-            self::assertSame('payment_success', $event['event_type']);
-        }
+        $this->expectException(WebhookVerificationException::class);
+        $this->expectExceptionMessage('signature does not match');
+        Webhook::verify(self::fixture(), self::headers(self::UPPER_SIGNATURE), self::KEY);
     }
 
-    public function testComputedSignatureMatchesDesignVector(): void
+    public function testSurroundingWhitespaceIsIgnored(): void
+    {
+        $event = Webhook::verify(self::fixture(), self::headers(' ' . self::DOCUMENTED_SIGNATURE . "\n"), self::KEY);
+
+        self::assertSame('payment_success', $event['event_type']);
+    }
+
+    public function testComputedSignatureMatchesDocumentedSignatureExactly(): void
     {
         $message = 'payment_success:9d3b6f1e-2c4a-4e8b-a7d5-1f0c3e9b8a26:3c8e1f72-5a9d-4b16-8e2f-7d4c0a9b6e53:'
             . '66f2a91c4be7d3a5c1e08b47:API-VACT_TRA-3C8E1-a4f7c2d9-6b1e-4f38-9c5a-2e8d7b0f1c64:vact_transfer:'
             . '2025-09-29T10:51:44Z::' . self::TIMESTAMP;
         $computed = base64_encode(hash_hmac('sha256', $message, self::KEY, true));
 
-        // DESIGN.md lists the upper-case form as computed; the HMAC is in fact the lower-case one.
         self::assertSame(self::DOCUMENTED_SIGNATURE, $computed);
-        self::assertSame(strtolower(self::UPPER_SIGNATURE), strtolower($computed));
     }
 
     public function testClientMethodDelegates(): void

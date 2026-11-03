@@ -59,7 +59,8 @@ final class Transfers extends AbstractResource
 
     /**
      * POST /v2/transfers/bank, or /v2/transfers/bank/{subAccountId}.
-     * Generates merchantTxRef if you do not pass one; it is always in the result.
+     * Generates merchantTxRef if you do not pass one; it is always in the result,
+     * and on failure in the exception's getReference().
      *
      * @param BankTransferParams $params
      * @param SubAccountOption   $options
@@ -75,12 +76,16 @@ final class Transfers extends AbstractResource
         [$params, $ref] = Params::withReference($params);
 
         /** @var BankTransfer */
-        return Params::attachReference($this->client->request('POST', $path, [], $params), $ref);
+        return Params::attachReference(
+            Params::sendWithReference(fn(): mixed => $this->client->request('POST', $path, [], $params), 'merchantTxRef', $ref),
+            $ref,
+        );
     }
 
     /**
      * POST /v2/transfers/wallet, or /v2/transfers/wallet/{subAccountId}.
-     * Generates merchantTxRef if you do not pass one; it is always in the result.
+     * Generates merchantTxRef if you do not pass one; it is always in the result,
+     * and on failure in the exception's getReference().
      *
      * @param WalletTransferParams $params
      * @param SubAccountOption     $options
@@ -96,6 +101,9 @@ final class Transfers extends AbstractResource
         [$params, $ref] = Params::withReference($params);
 
         /** @var WalletTransfer */
-        return Params::attachReference($this->client->request('POST', $path, [], $params), $ref);
+        return Params::attachReference(
+            Params::sendWithReference(fn(): mixed => $this->client->request('POST', $path, [], $params), 'merchantTxRef', $ref),
+            $ref,
+        );
     }
 }

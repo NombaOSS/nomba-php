@@ -318,7 +318,8 @@ final class Checkout extends AbstractResource
      *
      * This endpoint has no merchantTxRef; its reference is order.orderReference.
      * If you pass an order without an orderReference, one is generated (UUID v4),
-     * and the result always contains orderReference so you can requery it.
+     * and the result always contains orderReference so you can requery it. If the
+     * call throws, the exception's getReference() holds it (field "order.orderReference").
      *
      * @param ChargeSavedCardParams $params
      *
@@ -334,7 +335,8 @@ final class Checkout extends AbstractResource
             [$order, $ref] = Params::withReference($params['order'], 'orderReference');
             $params['order'] = $order;
         }
-        $data = $this->requestArray('POST', '/v1/checkout/tokenized-card-payment', [], $params);
+        $send = fn(): array => $this->requestArray('POST', '/v1/checkout/tokenized-card-payment', [], $params);
+        $data = $ref === null ? $send() : Params::sendWithReference($send, 'order.orderReference', $ref);
 
         /** @var ChargeSavedCardResult */
         return $ref === null ? $data : Params::attachReference($data, $ref, 'orderReference');

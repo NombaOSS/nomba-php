@@ -25,5 +25,6 @@ final class WebhookEventType
         self::PAYOUT_REFUND,
     ];
 
+    /** @codeCoverageIgnore */
     private function __construct() {}
 }

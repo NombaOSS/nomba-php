@@ -29,5 +29,6 @@ final class TransactionStatus
     /** Statuses that are not final: wait for a webhook or requery. */
     public const PENDING = [self::PAYMENT_FAILED, self::REVERSED_BY_VENDOR, self::PENDING_BILLING, self::PROCESSING];
 
+    /** @codeCoverageIgnore */
     private function __construct() {}
 }

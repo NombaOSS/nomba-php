@@ -482,5 +482,6 @@ namespace Nomba;
  */
 final class Types
 {
+    /** @codeCoverageIgnore */
     private function __construct() {}
 }

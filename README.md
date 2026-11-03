@@ -277,17 +277,28 @@ The SDK retries GET requests and token issue/refresh automatically, up to `maxRe
 
 **POST, PUT and DELETE are never retried automatically.** If a transfer request times out, Nomba may already have moved the money; sending it again could pay twice. The one exception is a 401: the SDK renews the token and replays the request once, because a 401 means Nomba rejected it before processing.
 
-For money-moving calls (`transfers->toBank`, `transfers->toWallet`, every `bills` purchase), pass your own `merchantTxRef` and store it before you send. If the call fails without a clear answer, requery with that reference instead of sending again:
+For money-moving calls (`transfers->toBank`, `transfers->toWallet`, every `bills` purchase), pass your own `merchantTxRef` and store it before you send. If the call fails without a clear answer (a timeout, a connection error or a 5xx), requery with that reference before retrying, and if you do retry, send the same reference so Nomba can deduplicate:
 
 ```php
+use Nomba\Exception\ConnectionException;
+use Nomba\Exception\NotFoundException;
+use Nomba\Exception\ServerException;
+
 try {
     $result = $nomba->transfers->toBank($params + ['merchantTxRef' => $ref]);
-} catch (Nomba\Exception\ConnectionException $e) {
-    $result = $nomba->transactions->get(['merchantTxRef' => $ref]); // NotFoundException: never received, safe to resend with the same $ref
+} catch (ConnectionException|ServerException $e) {   // ConnectionException includes TimeoutException
+    $ref = $e->getReference()?->value ?? $ref;
+    try {
+        $result = $nomba->transactions->get(['merchantTxRef' => $ref]);
+    } catch (NotFoundException) {
+        // Nomba never received it: retry with the same $ref.
+    }
 }
 ```
 
-If you leave `merchantTxRef` out, the SDK generates a UUID v4 and adds it to the returned array as `$result['merchantTxRef']`, so you can still requery. `checkout->chargeSavedCard()` has no `merchantTxRef`; its reference is `order.orderReference`, which is generated the same way when you pass an `order` without one, and returned as `$result['orderReference']`.
+If you leave `merchantTxRef` out, the SDK generates a UUID v4. On success it is in the returned array as `$result['merchantTxRef']`; on failure, every exception from these calls carries it: `$e->getReference()` returns a `Nomba\Exception\Reference` with `field` (`"merchantTxRef"`) and `value`. Either way you can requery without having picked a reference yourself.
+
+`checkout->chargeSavedCard()` has no `merchantTxRef`; its reference is `order.orderReference`. It is generated the same way when you pass an `order` without one, returned as `$result['orderReference']`, and on failure available as `$e->getReference()` with `field` `"order.orderReference"`.
 
 Global payout and collection calls take an `idempotencyKey`; pass one and reuse it when retrying.
 
@@ -354,6 +365,7 @@ http_response_code(200);
 ```
 
 - `Webhook::verify()` needs no API credentials. `$nomba->webhooks->verify()` does the same on a client.
+- The signature is compared exactly, in constant time (base64 is case-sensitive), after trimming surrounding whitespace.
 - Headers can be any case. A plain array, PSR-7 `getHeaders()`, Laravel/Symfony `$request->headers->all()` and `$_SERVER` (`HTTP_NOMBA_SIGNATURE`) all work.
 - It reads `nomba-signature` (or the older `nomba-sig-value`) and `nomba-timestamp`, and rejects a `nomba-signature-algorithm` other than `HmacSHA256`.
 - The fourth argument is a tolerance in seconds: timestamps further than that from now are rejected, which stops replayed requests. It is off by default (`null`); 300 is a reasonable value if your clock is in sync.

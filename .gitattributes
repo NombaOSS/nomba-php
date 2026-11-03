@@ -1,6 +1,7 @@
 # Keep the Packagist dist archive small: only src/, LICENSE, README, CHANGELOG and composer.json.
 /.github            export-ignore
 /examples           export-ignore
+/scripts            export-ignore
 /tests              export-ignore
 /.gitattributes     export-ignore
 /.gitignore         export-ignore

@@ -10,7 +10,8 @@ use Nomba\Internal\Params;
 
 /**
  * Airtime, data, electricity, cable TV and betting. Purchases use the v2
- * endpoints, generate merchantTxRef when you do not pass one, and are never
+ * endpoints, generate merchantTxRef when you do not pass one (returned in the
+ * result, and on failure in the exception's getReference()), and are never
  * retried automatically.
  *
  * @phpstan-import-type BillPurchase from \Nomba\Types
@@ -243,6 +244,9 @@ final class Bills extends AbstractResource
         [$params, $ref] = Params::withReference($params);
 
         /** @var BillPurchase */
-        return Params::attachReference($this->client->request('POST', $path, [], $params), $ref);
+        return Params::attachReference(
+            Params::sendWithReference(fn(): mixed => $this->client->request('POST', $path, [], $params), 'merchantTxRef', $ref),
+            $ref,
+        );
     }
 }

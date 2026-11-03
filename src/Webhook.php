@@ -27,6 +27,7 @@ final class Webhook
     public const ALGORITHM_HEADER = 'nomba-signature-algorithm';
     public const ALGORITHM = 'HmacSHA256';
 
+    /** @codeCoverageIgnore */
     private function __construct() {}
 
     /**
@@ -107,8 +108,8 @@ final class Webhook
         ]);
         $expected = base64_encode(hash_hmac('sha256', $message, $signingKey, true));
 
-        // Case-insensitive, as in Nomba's reference implementation.
-        if (!hash_equals(strtolower($expected), strtolower(trim($signature)))) {
+        // Exact, constant-time comparison: base64 is case-sensitive.
+        if (!hash_equals($expected, trim($signature))) {
             throw new WebhookVerificationException('Webhook signature does not match.');
         }
 

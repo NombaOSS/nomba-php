@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Nomba\Internal;
 
+use Nomba\Exception\NombaException;
+use Nomba\Exception\Reference;
 use Nomba\Exception\ValidationException;
 
 /**
@@ -157,5 +159,25 @@ final class Params
         }
 
         return $data;
+    }
+
+    /**
+     * Run a money-moving request; any SDK exception it throws carries the reference.
+     *
+     * @template T
+     *
+     * @param callable(): T $send
+     *
+     * @return T
+     *
+     * @throws NombaException
+     */
+    public static function sendWithReference(callable $send, string $field, string $value): mixed
+    {
+        try {
+            return $send();
+        } catch (NombaException $e) {
+            throw $e->withReference(new Reference($field, $value));
+        }
     }
 }

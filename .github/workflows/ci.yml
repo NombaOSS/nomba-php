@@ -63,3 +63,20 @@ jobs:
       - run: composer update --no-interaction --no-progress --prefer-dist
       - run: composer analyse
       - run: composer cs-check
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          coverage: pcov
+          tools: composer:v2
+      - run: composer update --no-interaction --no-progress --prefer-dist
+      - run: vendor/bin/phpunit --testsuite unit --coverage-text --coverage-clover build/clover.xml
+      # Fails the job below 90% line coverage of src/.
+      - run: php scripts/check-coverage.php build/clover.xml 90

@@ -7,4 +7,5 @@ parameters:
         - src
         - tests
         - examples
+        - scripts
     tmpDir: .phpstan.cache
