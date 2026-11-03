@@ -8,6 +8,7 @@ use Nomba\Config;
 use Nomba\Exception\ApiException;
 use Nomba\Exception\AuthenticationException;
 use Nomba\Exception\ConnectionException;
+use Nomba\Http\RequestKind;
 use Nomba\Http\Transport;
 
 /**
@@ -80,7 +81,7 @@ final class TokenManager
                 [],
                 ['clientId' => $this->config->clientId, 'access_token' => $token->accessToken],
                 ['Authorization' => 'Bearer ' . $token->accessToken],
-                false,
+                RequestKind::TokenRevoke,
             );
         } finally {
             $this->config->tokenStore->set(null);
@@ -133,7 +134,7 @@ final class TokenManager
     private function tokenRequest(string $path, #[\SensitiveParameter] array $body): Token
     {
         try {
-            $data = $this->transport->request('POST', $path, [], $body, [], true);
+            $data = $this->transport->request('POST', $path, [], $body, [], RequestKind::Token);
         } catch (ApiException $e) {
             $status = $e->httpStatus ?? 0;
             $isClientError = ($status >= 400 && $status < 500 && $status !== 429) || ($status >= 200 && $status < 300);

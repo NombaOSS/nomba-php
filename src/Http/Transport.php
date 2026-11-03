@@ -49,7 +49,7 @@ final class Transport
      * @param array<string, mixed>  $query   null values are dropped, booleans sent as true/false
      * @param array<mixed>|null     $body    JSON body; null sends no body
      * @param array<string, string> $headers extra headers (for example Authorization)
-     * @param bool                  $retry   whether connection errors, timeouts, 429 and 5xx may be retried
+     * @param RequestKind           $kind    decides whether connection errors, timeouts, 429 and 5xx are retried
      *
      * @return mixed the envelope's `data`
      *
@@ -59,11 +59,11 @@ final class Transport
     public function request(
         string $method,
         string $path,
-        array $query,
-        ?array $body,
+        array $query = [],
+        ?array $body = null,
         #[\SensitiveParameter]
-        array $headers,
-        bool $retry,
+        array $headers = [],
+        RequestKind $kind = RequestKind::Api,
     ): mixed {
         $method = strtoupper($method);
         $url = $this->config->baseUrl . $path;
@@ -84,7 +84,7 @@ final class Transport
             $payload = $body === [] ? '{}' : json_encode($body, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_PRESERVE_ZERO_FRACTION);
         }
 
-        $maxRetries = $retry ? $this->config->maxRetries : 0;
+        $maxRetries = $kind->retries($method) ? $this->config->maxRetries : 0;
         for ($attempt = 0; ; ++$attempt) {
             $canRetry = $attempt < $maxRetries;
             try {
@@ -104,7 +104,7 @@ final class Transport
                 continue;
             }
 
-            return self::unwrap($response, $method, $path);
+            return self::unwrap($response, $method, $path, $kind->isTokenEndpoint());
         }
     }
 
@@ -204,9 +204,11 @@ final class Transport
     }
 
     /**
+     * @param bool $stripData drop `data` from error bodies (token endpoints may echo token material)
+     *
      * @throws ApiException
      */
-    private static function unwrap(ResponseInterface $response, string $method, string $path): mixed
+    private static function unwrap(ResponseInterface $response, string $method, string $path, bool $stripData): mixed
     {
         $status = $response->getStatusCode();
         $raw = (string) $response->getBody();
@@ -233,6 +235,8 @@ final class Transport
             }
         }
 
+        $errorBody = $stripData && \is_array($body) ? array_diff_key($body, ['data' => true]) : $body;
+
         if ($status >= 200 && $status < 300) {
             if (!$isJson) {
                 throw new ApiException(
@@ -240,7 +244,7 @@ final class Transport
                     $status,
                     null,
                     'response was not valid JSON',
-                    $body,
+                    $errorBody,
                     $method,
                     $path,
                 );
@@ -250,7 +254,7 @@ final class Transport
             }
             $description ??= 'request was not successful';
 
-            throw new ApiException(self::message($status, $code, $description, $method, $path), $status, $code, $description, $body, $method, $path);
+            throw new ApiException(self::message($status, $code, $description, $method, $path), $status, $code, $description, $errorBody, $method, $path);
         }
 
         $description ??= $response->getReasonPhrase() !== '' ? $response->getReasonPhrase() : 'request failed';
@@ -262,7 +266,7 @@ final class Transport
                 $status,
                 $code,
                 $description,
-                $body,
+                $errorBody,
                 $method,
                 $path,
                 self::retryAfter($response),
@@ -281,7 +285,7 @@ final class Transport
             default => ApiException::class,
         };
 
-        throw new $class($message, $status, $code, $description, $body, $method, $path);
+        throw new $class($message, $status, $code, $description, $errorBody, $method, $path);
     }
 
     private static function message(int $status, ?string $code, string $description, string $method, string $path): string

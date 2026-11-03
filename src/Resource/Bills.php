@@ -240,13 +240,7 @@ final class Bills extends AbstractResource
      */
     private function purchase(string $path, array $params, array $options): array
     {
-        $path .= Params::subAccountSuffix($options);
-        [$params, $ref] = Params::withReference($params);
-
         /** @var BillPurchase */
-        return Params::attachReference(
-            Params::sendWithReference(fn(): mixed => $this->client->request('POST', $path, [], $params), 'merchantTxRef', $ref),
-            $ref,
-        );
+        return $this->postWithReference($path . Params::subAccountSuffix($options), $params);
     }
 }

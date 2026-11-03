@@ -48,9 +48,7 @@ final class Accounts extends AbstractResource
      */
     public function getBalance(array $params = []): array
     {
-        $path = isset($params['subAccountId'])
-            ? '/v1/accounts/' . Params::segment($params['subAccountId'], 'subAccountId') . '/balance'
-            : '/v1/accounts/balance';
+        $path = '/v1/accounts' . Params::subAccountSuffix($params) . '/balance';
 
         /** @var Balance $data */
         $data = $this->requestArray('GET', $path);
@@ -91,9 +89,7 @@ final class Accounts extends AbstractResource
     public function listTerminals(array $params = []): array
     {
         Params::checkLimit($params);
-        $path = isset($params['subAccountId'])
-            ? '/v1/accounts/' . Params::segment($params['subAccountId'], 'subAccountId') . '/terminals'
-            : '/v1/accounts/terminals';
+        $path = '/v1/accounts' . Params::subAccountSuffix($params) . '/terminals';
         $query = Params::only($params, ['limit', 'cursor', 'terminalId', 'serialNumber', 'terminalLabel', 'merchantName']);
 
         /** @var TerminalPage $data */

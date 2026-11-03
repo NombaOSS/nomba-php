@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Nomba\Internal;
 
-use Nomba\Exception\NombaException;
-use Nomba\Exception\Reference;
 use Nomba\Exception\ValidationException;
 
 /**
@@ -47,7 +45,8 @@ final class Params
 
     /**
      * Read the optional sub-account from an options array and return the path
-     * suffix ("" or "/{encoded id}").
+     * segment to splice in: "" or "/{encoded id}". Works as a suffix
+     * ('/v2/transfers/bank' . $s) and as an infix ('/v1/accounts' . $s . '/balance').
      *
      * @param array<string, mixed> $options
      *
@@ -126,58 +125,4 @@ final class Params
         return array_intersect_key($params, array_flip($keys));
     }
 
-    /**
-     * Ensure $params[$key] holds a reference, generating a UUID v4 if missing.
-     *
-     * @param array<string, mixed> $params
-     *
-     * @return array{0: array<string, mixed>, 1: string}
-     */
-    public static function withReference(array $params, string $key = 'merchantTxRef'): array
-    {
-        $ref = $params[$key] ?? null;
-        if (!\is_string($ref) || $ref === '') {
-            $ref = Uuid::v4();
-            $params[$key] = $ref;
-        }
-
-        return [$params, $ref];
-    }
-
-    /**
-     * Add the reference to the returned data if the API did not echo it.
-     *
-     * @return array<mixed>
-     */
-    public static function attachReference(mixed $data, string $ref, string $key = 'merchantTxRef'): array
-    {
-        if (!\is_array($data)) {
-            return [$key => $ref];
-        }
-        if (!isset($data[$key]) || $data[$key] === '') {
-            $data[$key] = $ref;
-        }
-
-        return $data;
-    }
-
-    /**
-     * Run a money-moving request; any SDK exception it throws carries the reference.
-     *
-     * @template T
-     *
-     * @param callable(): T $send
-     *
-     * @return T
-     *
-     * @throws NombaException
-     */
-    public static function sendWithReference(callable $send, string $field, string $value): mixed
-    {
-        try {
-            return $send();
-        } catch (NombaException $e) {
-            throw $e->withReference(new Reference($field, $value));
-        }
-    }
 }

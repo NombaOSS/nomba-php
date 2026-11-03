@@ -353,4 +353,41 @@ final class AuthTest extends TestCase
             self::assertStringNotContainsString('Bearer', $text);
         }
     }
+
+    public function testTokenEndpointErrorBodiesDropData(): void
+    {
+        $leaky = ['code' => '400', 'description' => 'bad', 'data' => ['access_token' => 'leaked-token']];
+        $nomba = $this->nomba([self::json(400, $leaky)]);
+
+        try {
+            $nomba->accounts->getParent();
+            self::fail('Expected AuthenticationException');
+        } catch (AuthenticationException $e) {
+            self::assertSame(['code' => '400', 'description' => 'bad'], $e->body);
+            $previous = $e->getPrevious();
+            self::assertInstanceOf(ValidationException::class, $previous);
+            self::assertSame(['code' => '400', 'description' => 'bad'], $previous->body);
+        }
+
+        $nomba = $this->nomba([self::json(500, $leaky)], ['tokenStore' => self::storeWith(600)]);
+        try {
+            $nomba->auth->revoke();
+            self::fail('Expected ServerException');
+        } catch (ServerException $e) {
+            self::assertSame(['code' => '400', 'description' => 'bad'], $e->body);
+            self::assertSame(1, $this->requestCount(), 'revoke is never retried');
+        }
+    }
+
+    public function testApiErrorBodiesKeepData(): void
+    {
+        $nomba = $this->nomba([self::tokenResponse(), self::json(400, ['code' => '400', 'description' => 'bad', 'data' => ['field' => 'amount']])]);
+
+        try {
+            $nomba->accounts->getParent();
+            self::fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            self::assertSame(['code' => '400', 'description' => 'bad', 'data' => ['field' => 'amount']], $e->body);
+        }
+    }
 }

@@ -11,7 +11,7 @@ use Nomba\Exception\AuthenticationException;
 use Nomba\Exception\ConnectionException;
 
 /**
- * Authenticated requests. Only GET is retried automatically; a 401 triggers one
+ * Authenticated API requests (RequestKind::Api: only GET is retried automatically); a 401 triggers one
  * token renewal and a single replay (safe for POST: Nomba did not process it).
  *
  * @internal
@@ -33,11 +33,10 @@ final class ApiClient
      */
     public function request(string $method, string $path, array $query = [], ?array $body = null): mixed
     {
-        $retry = strtoupper($method) === 'GET';
         $token = $this->tokens->accessToken();
 
         try {
-            return $this->transport->request($method, $path, $query, $body, ['Authorization' => 'Bearer ' . $token], $retry);
+            return $this->transport->request($method, $path, $query, $body, ['Authorization' => 'Bearer ' . $token]);
         } catch (AuthenticationException $e) {
             if ($e->httpStatus !== 401) {
                 throw $e;
@@ -45,7 +44,7 @@ final class ApiClient
             $this->tokens->invalidate($token);
             $token = $this->tokens->accessToken();
 
-            return $this->transport->request($method, $path, $query, $body, ['Authorization' => 'Bearer ' . $token], $retry);
+            return $this->transport->request($method, $path, $query, $body, ['Authorization' => 'Bearer ' . $token]);
         }
     }
 

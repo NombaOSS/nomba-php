@@ -72,14 +72,8 @@ final class Transfers extends AbstractResource
      */
     public function toBank(array $params, array $options = []): array
     {
-        $path = '/v2/transfers/bank' . Params::subAccountSuffix($options);
-        [$params, $ref] = Params::withReference($params);
-
         /** @var BankTransfer */
-        return Params::attachReference(
-            Params::sendWithReference(fn(): mixed => $this->client->request('POST', $path, [], $params), 'merchantTxRef', $ref),
-            $ref,
-        );
+        return $this->postWithReference('/v2/transfers/bank' . Params::subAccountSuffix($options), $params);
     }
 
     /**
@@ -97,13 +91,7 @@ final class Transfers extends AbstractResource
      */
     public function toWallet(array $params, array $options = []): array
     {
-        $path = '/v2/transfers/wallet' . Params::subAccountSuffix($options);
-        [$params, $ref] = Params::withReference($params);
-
         /** @var WalletTransfer */
-        return Params::attachReference(
-            Params::sendWithReference(fn(): mixed => $this->client->request('POST', $path, [], $params), 'merchantTxRef', $ref),
-            $ref,
-        );
+        return $this->postWithReference('/v2/transfers/wallet' . Params::subAccountSuffix($options), $params);
     }
 }

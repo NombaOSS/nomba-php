@@ -330,16 +330,8 @@ final class Checkout extends AbstractResource
      */
     public function chargeSavedCard(array $params): array
     {
-        $ref = null;
-        if (isset($params['order'])) {
-            [$order, $ref] = Params::withReference($params['order'], 'orderReference');
-            $params['order'] = $order;
-        }
-        $send = fn(): array => $this->requestArray('POST', '/v1/checkout/tokenized-card-payment', [], $params);
-        $data = $ref === null ? $send() : Params::sendWithReference($send, 'order.orderReference', $ref);
-
         /** @var ChargeSavedCardResult */
-        return $ref === null ? $data : Params::attachReference($data, $ref, 'orderReference');
+        return $this->postWithReference('/v1/checkout/tokenized-card-payment', $params, 'orderReference', 'order');
     }
 
     /**
