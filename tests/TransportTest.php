@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Nomba\Tests;
 
-use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Psr7\Request;
@@ -25,9 +24,9 @@ use Nomba\Nomba;
 
 final class TransportTest extends TestCase
 {
-    private static function connectError(int $errno = 7, string $message = 'cURL error 7: Failed to connect'): ConnectException
+    private static function connectError(int $errno = 7, string $message = 'cURL error 7: Failed to connect'): TransferException
     {
-        return new ConnectException($message, new Request('GET', 'https://sandbox.nomba.com/x?secret=1'), null, ['errno' => $errno]);
+        return self::networkError($errno, $message, 'GET', 'https://sandbox.nomba.com/x?secret=1');
     }
 
     public function testSendsStandardHeaders(): void
@@ -346,7 +345,7 @@ final class TransportTest extends TestCase
             self::assertSame('GET', $e->method);
             self::assertSame('/v1/accounts/parent', $e->path);
             self::assertSame('Request to Nomba timed out after 30 s [GET /v1/accounts/parent]', $e->getMessage());
-            self::assertInstanceOf(ConnectException::class, $e->getPrevious());
+            self::assertInstanceOf(TransferException::class, $e->getPrevious());
         }
     }
 
@@ -369,8 +368,8 @@ final class TransportTest extends TestCase
         $nomba = $this->nomba([
             self::tokenResponse(),
             new RequestException('TLS failure', $request),
-            new TransferException('weird'),
-            new RequestException('with response', $request, new Response(404, [], '{"code":"404","description":"nope"}')),
+            self::transferError('weird'),
+            RequestException::create($request, new Response(404, [], '{"code":"404","description":"nope"}')),
         ], ['maxRetries' => 0]);
 
         foreach ([ConnectionException::class, ConnectionException::class, NotFoundException::class] as $expected) {

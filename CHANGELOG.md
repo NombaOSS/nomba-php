@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Supports Guzzle 8 (`guzzlehttp/guzzle` `^7.5 || ^8.3`). Timeouts and connection failures map to `TimeoutException` and `ConnectionException` on both versions.
+
 ## [0.1.1] - 2026-11-04
 
 ### Documentation

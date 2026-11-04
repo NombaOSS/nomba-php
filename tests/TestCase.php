@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace Nomba\Tests;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\NetworkException;
+use GuzzleHttp\Exception\NetworkTimeoutException;
+use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use Nomba\Nomba;
 use Psr\Http\Message\RequestInterface;
@@ -119,5 +124,31 @@ abstract class TestCase extends \PHPUnit\Framework\TestCase
     protected function requestCount(): int
     {
         return \count($this->history);
+    }
+
+    /**
+     * A failure with no response, as Guzzle reports it: cURL's errno in the
+     * handler context on Guzzle 7, a timeout class on Guzzle 8. The Guzzle 7
+     * constructor is called through reflection because static analysis runs
+     * against Guzzle 8.
+     */
+    protected static function networkError(int $errno, string $message, string $method = 'GET', string $url = 'https://sandbox.nomba.com/'): TransferException
+    {
+        $request = new Request($method, $url);
+        if (!class_exists(NetworkException::class)) {
+            return (new \ReflectionClass(ConnectException::class))->newInstance($message, $request, null, ['errno' => $errno]);
+        }
+
+        return $errno === 28 ? new NetworkTimeoutException($message, $request) : new ConnectException($message, $request);
+    }
+
+    /**
+     * A bare TransferException; Guzzle 8 requires the request, Guzzle 7 doesn't accept it.
+     */
+    protected static function transferError(string $message): TransferException
+    {
+        $args = class_exists(NetworkException::class) ? [$message, new Request('GET', 'https://sandbox.nomba.com/')] : [$message];
+
+        return (new \ReflectionClass(TransferException::class))->newInstanceArgs($args);
     }
 }

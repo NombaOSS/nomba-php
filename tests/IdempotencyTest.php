@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Nomba\Tests;
 
-use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Exception\TransferException;
 use Nomba\Exception\ApiException;
 use Nomba\Exception\ConnectionException;
 use Nomba\Exception\NombaException;
@@ -110,7 +109,7 @@ final class IdempotencyTest extends TestCase
      */
     public static function failures(): iterable
     {
-        $timeout = new ConnectException('cURL error 28: Operation timed out', new Request('POST', 'https://sandbox.nomba.com/'), null, ['errno' => 28]);
+        $timeout = self::networkError(28, 'cURL error 28: Operation timed out', 'POST');
         $server = self::json(500, ['code' => '500', 'description' => 'Server error']);
         $toBank = static fn(Nomba $n): mixed => $n->transfers->toBank(['amount' => 1, 'accountNumber' => '1', 'accountName' => 'n', 'bankCode' => 'b']);
         $airtime = static fn(Nomba $n): mixed => $n->bills->buyAirtime(['amount' => 1, 'phoneNumber' => 'p', 'network' => 'MTN']);
@@ -147,7 +146,7 @@ final class IdempotencyTest extends TestCase
 
     public function testCallerReferenceReachesCallerOnTimeout(): void
     {
-        $nomba = $this->nomba([self::tokenResponse(), new ConnectException('timed out', new Request('POST', 'https://x/'), null, ['errno' => 28])]);
+        $nomba = $this->nomba([self::tokenResponse(), self::networkError(28, 'timed out', 'POST')]);
 
         try {
             $nomba->bills->buyElectricity(['disco' => 'd', 'customerId' => 'c', 'amount' => 1, 'merchantTxRef' => 'mine-9'], ['subAccountId' => 's1']);
@@ -155,7 +154,7 @@ final class IdempotencyTest extends TestCase
         } catch (TimeoutException $e) {
             self::assertInstanceOf(ConnectionException::class, $e);
             self::assertSame('mine-9', $e->getReference()?->value);
-            self::assertInstanceOf(ConnectException::class, $e->getPrevious(), 'class and previous are preserved');
+            self::assertInstanceOf(TransferException::class, $e->getPrevious(), 'class and previous are preserved');
         }
     }
 
