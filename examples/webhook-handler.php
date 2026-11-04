@@ -26,7 +26,9 @@ $server = $_SERVER;
 try {
     // $_SERVER carries headers as HTTP_NOMBA_SIGNATURE etc.; that form is accepted.
     // In Laravel/Symfony pass $request->headers->all(); with PSR-7, $request->getHeaders().
-    $event = Webhook::verify($rawBody, $server, $signingKey, 300);
+    // No tolerance: Nomba doesn't document whether retries get a fresh timestamp,
+    // so one could reject legitimate retries. Deduplicate on requestId instead.
+    $event = Webhook::verify($rawBody, $server, $signingKey);
 } catch (WebhookVerificationException $e) {
     http_response_code(400);
     exit;
