@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentation
+
+- Webhook docs and examples no longer recommend a timestamp tolerance (previously 300 s): Nomba doesn't document whether retries get a fresh `nomba-timestamp`, so a tolerance could reject legitimate retries. Deduplicate on `requestId` instead. The docs also note that the amount, `orderReference`, `merchantTxRef` and `tokenKey` aren't signed, so money decisions should be confirmed with `transactions.get`.
+
 ## [0.1.0] - 2026-11-04
 
 ### Added

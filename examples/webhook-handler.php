@@ -37,14 +37,21 @@ try {
 // Nomba may deliver the same event more than once: deduplicate on requestId.
 switch ($event['event_type']) {
     case WebhookEventType::PAYMENT_SUCCESS:
-        // Mark the order paid.
+        // The signature doesn't cover the amount or orderReference: confirm with
+        // $nomba->transactions->get(['orderReference' => ...]) and check the amount,
+        // then mark the order paid.
         break;
     case WebhookEventType::PAYOUT_SUCCESS:
+        // Mark the payout delivered.
+        break;
     case WebhookEventType::PAYOUT_FAILED:
+        // Not final: Nomba may still retry the payout. Don't refund yet.
+        break;
     case WebhookEventType::PAYOUT_REFUND:
-        // Update the payout record.
+        // Final: the money is back in your wallet. Refund your user once.
         break;
 }
+
 
 http_response_code(200);
 echo 'ok';
