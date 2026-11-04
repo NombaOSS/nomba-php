@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/NombaOSS/nomba-php/main/.github/assets/banner-dark.svg">
+  <img alt="Nomba PHP SDK" src="https://raw.githubusercontent.com/NombaOSS/nomba-php/main/.github/assets/banner-light.svg" width="100%">
+</picture>
+
 # Nomba PHP SDK
 
 PHP client for the [Nomba API](https://developer.nomba.com): accounts, virtual accounts, checkout, transfers, transactions, terminals, direct debits, bills, global payouts and collections, and webhook verification.
@@ -31,6 +36,16 @@ echo $balance['amount'], ' ', $balance['currency'], PHP_EOL;
 ```
 
 The client defaults to the sandbox. No request is made until the first API call; the access token is obtained then.
+
+## Building with an AI coding agent?
+
+Install the [Nomba agent skills](https://github.com/NombaOSS/skills) so Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI and other agents write Nomba integrations the safe way: idempotency references, requery on timeouts, refunds only when final, and webhook verification.
+
+```bash
+npx skills add NombaOSS/skills
+```
+
+In Claude Code you can also use `/plugin marketplace add NombaOSS/skills` and then `/plugin install nomba@nomba`.
 
 ## Configuration
 
