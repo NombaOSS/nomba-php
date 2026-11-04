@@ -37,7 +37,7 @@ use Nomba\Resource\Webhooks;
  */
 final class Nomba
 {
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.1.1';
 
     public readonly Auth $auth;
     public readonly Accounts $accounts;
