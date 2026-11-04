@@ -11,7 +11,7 @@ PHP client for the [Nomba API](https://developer.nomba.com): accounts, virtual a
 [![Packagist Version](https://img.shields.io/packagist/v/nombaoss/nomba-php)](https://packagist.org/packages/nombaoss/nomba-php)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Requires PHP 8.1 or later. The only runtime dependency is `guzzlehttp/guzzle` ^7.
+Requires PHP 8.1 or later. The only runtime dependency is `guzzlehttp/guzzle` 7.5+ or 8.3+.
 
 ## Install
 

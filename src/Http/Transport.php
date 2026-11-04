@@ -6,9 +6,9 @@ namespace Nomba\Http;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\ConnectTimeoutException;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Exception\NetworkTimeoutException;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\RequestOptions;
 use Nomba\Config;
@@ -160,13 +160,12 @@ final class Transport
                 RequestOptions::HTTP_ERRORS => false,
                 RequestOptions::ALLOW_REDIRECTS => false,
             ]);
-        } catch (RequestException $e) {
-            $response = $e->getResponse();
-            if ($response !== null) {
+        } catch (GuzzleException $e) {
+            // Guzzle 7 attaches a received response to RequestException, Guzzle 8 to ResponseException.
+            $response = method_exists($e, 'getResponse') ? $e->getResponse() : null;
+            if ($response instanceof ResponseInterface) {
                 return $response;
             }
-            throw $this->connectionError($e, $method, $path);
-        } catch (GuzzleException $e) {
             throw $this->connectionError($e, $method, $path);
         }
     }
@@ -177,8 +176,11 @@ final class Transport
      */
     private function connectionError(GuzzleException $e, string $method, string $path): ConnectionException
     {
-        $context = $e instanceof ConnectException || $e instanceof RequestException ? $e->getHandlerContext() : [];
-        $timedOut = ($context['errno'] ?? null) === self::CURLE_OPERATION_TIMEDOUT
+        // Guzzle 7 reports cURL's errno in the handler context; Guzzle 8 has timeout classes instead.
+        $context = method_exists($e, 'getHandlerContext') ? $e->getHandlerContext() : [];
+        $timedOut = $e instanceof ConnectTimeoutException
+            || $e instanceof NetworkTimeoutException
+            || (\is_array($context) && ($context['errno'] ?? null) === self::CURLE_OPERATION_TIMEDOUT)
             || stripos($e->getMessage(), 'timed out') !== false;
 
         if ($timedOut) {
