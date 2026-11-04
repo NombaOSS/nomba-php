@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0] - 2026-11-04
 
 ### Added
 - `Nomba\Nomba` client for the Nomba API (version 0.1.0): configuration from options or `NOMBA_*` environment variables, sandbox by default, optional injected Guzzle client.
